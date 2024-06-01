@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Advanced Wave Pattern Analyzer</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Advanced Wave Pattern Analyzer</h1>
+    <div class="section" id="uploadSection">
+      <h2>Upload Image</h2>
+      <input type="file" id="imageInput" accept="image/*" required>
+    </div>
+    <div class="section" id="controlsSection">
+      <h2>Controls</h2>
+      <label for="threshold">Edge Detection Threshold:</label>
+      <input type="range" id="threshold" name="threshold" min="50" max="150" value="100">
+    </div>
+    <div class="section" id="canvasSection">
+      <h2>Analysis Result</h2>
+      <canvas id="canvas"></canvas>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+  <script src="script.js"></script>
+</body>
+</html>
