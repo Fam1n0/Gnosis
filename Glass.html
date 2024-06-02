@@ -96,6 +96,11 @@
 
             applyWavePatternAnalysis(edges, edges.cols, edges.rows, frequency);
             cv.imshow('canvas', edges);
+
+            src.delete();
+            gray.delete();
+            edges.delete();
+
             requestAnimationFrame(captureFrame);
         }
         captureFrame();
