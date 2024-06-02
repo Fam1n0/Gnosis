@@ -43,6 +43,11 @@
         <label for="frequency">Tuning Frequency:</label>
         <input type="range" id="frequency" min="1" max="100" value="50">
     </div>
+    <div class="guide">
+        <p>Use the sliders to adjust the edge detection thresholds and tuning frequency.</p>
+        <p>Threshold 1 and Threshold 2 control the sensitivity of the edge detection. Start with low values and increase gradually.</p>
+        <p>The tuning frequency adjusts the wave pattern analysis. Start with a moderate value and fine-tune as needed.</p>
+    </div>
 </div>
 <script async src="https://docs.opencv.org/4.x/opencv.js"></script>
 <script>
@@ -68,8 +73,12 @@
     });
 
     async function startCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+        } catch (error) {
+            console.error('Error accessing camera:', error);
+        }
     }
 
     function processVideo() {
