@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Real-Time Edge Detection and Tuning</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            color: #fff;
+        }
+        .container {
+            text-align: center;
+        }
+        video, canvas {
+            border: 1px solid #ccc;
+            margin-top: 20px;
+        }
+        .controls {
+            margin-top: 20px;
+        }
+        .controls label {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Real-Time Edge Detection and Tuning</h1>
+    <video id="video" width="640" height="480" autoplay></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
+    <div class="controls">
+        <label for="threshold1">Edge Detection Threshold 1:</label>
+        <input type="range" id="threshold1" min="0" max="255" value="50">
+        <label for="threshold2">Edge Detection Threshold 2:</label>
+        <input type="range" id="threshold2" min="0" max="255" value="100">
+        <label for="frequency">Tuning Frequency:</label>
+        <input type="range" id="frequency" min="1" max="100" value="50">
+    </div>
+    <div class="guide">
+        <p>Use the sliders to adjust the edge detection thresholds and tuning frequency.</p>
+        <p>Threshold 1 and Threshold 2 control the sensitivity of the edge detection. Start with low values and increase gradually.</p>
+        <p>The tuning frequency adjusts the wave pattern analysis. Start with a moderate value and fine-tune as needed.</p>
+    </div>
+</div>
+<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const threshold1Input = document.getElementById('threshold1');
+    const threshold2Input = document.getElementById('threshold2');
+    const frequencyInput = document.getElementById('frequency');
+
+    let threshold1 = threshold1Input.value;
+    let threshold2 = threshold2Input.value;
+    let frequency = frequencyInput.value;
+
+    threshold1Input.addEventListener('input', (e) => {
+        threshold1 = e.target.value;
+    });
+    threshold2Input.addEventListener('input', (e) => {
+        threshold2 = e.target.value;
+    });
+    frequencyInput.addEventListener('input', (e) => {
+        frequency = e.target.value;
+    });
+
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            video.play();
+        } catch (error) {
+            console.error('Error accessing camera:', error);
+        }
+    }
+
+    function processVideo() {
+        const src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
+        const gray = new cv.Mat(video.height, video.width, cv.CV_8UC1);
+        const edges = new cv.Mat(video.height, video.width, cv.CV_8UC1);
+
+        function captureFrame() {
+            console.log('Processing frame...');
+            ctx.drawImage(video, 0, 0, video.width, video.height);
+            let imageData = ctx.getImageData(0, 0, video.width, video.height);
+            src.data.set(imageData.data);
+
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+            cv.Canny(gray, edges, threshold1, threshold2);
+
+            applyWavePatternAnalysis(edges, edges.cols, edges.rows, frequency);
+            cv.imshow('canvas', edges);
+
+            src.delete();
+            gray.delete();
+            edges.delete();
+
+            requestAnimationFrame(captureFrame);
+        }
+        captureFrame();
+    }
+
+    function applyWavePatternAnalysis(mat, width, height, frequency) {
+        console.log('Applying wave pattern analysis...');
+        const friction = 0.9;
+        const angleFactor = frequency / 10;
+        const canvasData = new cv.Mat();
+
+        mat.copyTo(canvasData);
+
+        for (let y = 0; y < height; y += 10) {
+            for (let x = 0; x < width; x += 10) {
+                const angle = Math.atan2(y - height / 2, x - width / 2) * angleFactor;
+                const length = Math.min(width, height) / 2;
+                const endX = x + Math.cos(angle) * length * friction;
+                const endY = y + Math.sin(angle) * length * friction;
+
+                cv.line(canvasData, new cv.Point(x, y), new cv.Point(endX, endY), [255, 255, 255, 255], 1);
+            }
+        }
+        canvasData.copyTo(mat);
+        canvasData.delete();
+    }
+
+    video.addEventListener('play', () => {
+        processVideo();
+    });
+
+    startCamera();
+</script>
+</body>
+</html>
