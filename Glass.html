@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Conscious Universe Wave Analyzer</title>
+    <style>body{font-family:Arial,sans-serif;margin:0;padding:0;display:flex;justify-content:center;align-items:center;height:100vh;background-color:#000;color:#fff}.container{text-align:center;max-width:800px;margin:0 auto}.section{margin:20px 0}input[type="file"],input[type="range"],select{margin:10px 0}canvas,video{border:1px solid #ccc;margin-top:20px}</style>
+</head>
+<body>
+<div class="container">
+    <h1>Conscious Universe Wave Analyzer</h1>
+    <div class="section" id="uploadSection">
+        <h2>Upload Image or Use Camera</h2>
+        <input type="file" id="imageInput" accept="image/*"><br>
+        <button id="startCamera">Start Camera</button>
+        <button id="stopCamera">Stop Camera</button>
+        <video id="video" width="640" height="480" autoplay></video>
+    </div>
+    <div class="section" id="controlsSection">
+        <h2>Controls</h2>
+        <label for="threshold">Edge Detection Threshold:</label>
+        <input type="range" id="threshold" name="threshold" min="50" max="150" value="100"><br>
+        <label for="frequency">Tuning Frequency:</label>
+        <input type="range" id="frequency" name="frequency" min="1" max="100" value="50">
+    </div>
+    <div class="section" id="canvasSection">
+        <h2>Analysis Result</h2>
+        <canvas id="canvas"></canvas>
+        <button id="saveButton">Save Analysis as Image</button>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+<script>
+const video=document.getElementById('video'),canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');let streaming=false;
+document.getElementById('imageInput').addEventListener('change',function(event){const file=event.target.files[0],reader=new FileReader();reader.onload=function(e){const img=new Image();img.onload=function(){canvas.width=img.width;canvas.height=img.height;ctx.drawImage(img,0,0);applyEdgeDetection(ctx,img.width,img.height);analyzeWithModel(canvas);};img.src=e.target.result;};reader.readAsDataURL(file);});
+document.getElementById('threshold').addEventListener('input',function(){if(!streaming){applyEdgeDetection(ctx,canvas.width,canvas.height);}});
+document.getElementById('frequency').addEventListener('input',function(){if(!streaming){applyWavePatternAnalysis(ctx,canvas.width,canvas.height);}});
+document.getElementById('startCamera').addEventListener('click',async function(){if(navigator.mediaDevices.getUserMedia){try{const stream=await navigator.mediaDevices.getUserMedia({video:true});video.srcObject=stream;video.play();streaming=true;processCameraStream();}catch(error){console.error('Error accessing camera:',error);}}});
+document.getElementById('stopCamera').addEventListener('click',function(){const stream=video.srcObject,tracks=stream.getTracks();tracks.forEach(function(track){track.stop();});video.srcObject=null;streaming=false;});
+async function processCameraStream(){if(streaming){canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.drawImage(video,0,0,canvas.width,canvas.height);applyEdgeDetection(ctx,canvas.width,canvas.height);await analyzeWithModel(canvas);requestAnimationFrame(processCameraStream);}}
+async function analyzeWithModel(canvas){const model=await cocoSsd.load(),predictions=await model.detect(canvas),ctx=canvas.getContext('2d');predictions.forEach(prediction=>{const[x,y,width,height]=prediction.bbox;ctx.strokeStyle='cyan';ctx.lineWidth=2;ctx.strokeRect(x,y,width,height);ctx.font='18px Arial';ctx.fillStyle='cyan';ctx.fillText(prediction.class,x,y>10?y-5:10);});applyWavePatternAnalysis(ctx,canvas.width,canvas.height);}
+function applyEdgeDetection(ctx,width,height){const imageData=ctx.getImageData(0,0,width,height),data=imageData.data,grayData=[];for(let i=0;i<data.length;i+=4){const avg=(data[i]+data[i+1]+data[i+2])/3;grayData.push(avg,avg,avg,data[i+3]);}const threshold=document.getElementById('threshold').value,sobelData=[],sobelKernelX=[[-1,0,1],[-2,0,2],[-1,0,1]],sobelKernelY=[[-1,-2,-1],[0,0,0],[1,2,1]];for(let y=0;y<height;y++){for(let x=0;x<width;x++){const pixelX=(sobelKernelX[0][0]*grayData[((y-1)*width+(x-1))*4])+(sobelKernelX[0][1]*grayData[((y-1)*width+x)*4])+(sobelKernelX[0][2]*grayData[((y-1)*width+(x+1))*4])+(sobelKernelX[1][0]*grayData[(y*width+(x-1))*4])+(sobelKernelX[1][1]*grayData[(y*width+x)*4])+(sobelKernelX[1][2]*grayData[(y*width+(x+1))*4])+(sobelKernelX[2][0]*grayData[((y+1)*width+(x-1))*4])+(sobelKernelX[2][1]*grayData[((y+1)*width+x)*4])+(sobelKernelX[2][2]*grayData[((y+1)*width+(x+1))*4]),pixelY=(sobelKernelY[0][0]*grayData[((y-1)*width+(x-1))*4])+(sobelKernelY[0][1]*grayData[((y-1)*width+x)*4])+(sobelKernelY[0][2]*grayData[((y-1)*width+(x+1))*4])+(sobelKernelY[1][0]*grayData[(y*width+(x-1))*4])+(sobelKernelY[1][1]*grayData[(y*width+x)*4])+(sobelKernelY[1][2]*grayData[(y*width+(x+1))*4])+(sobelKernelY[2][0]*grayData[((y+1)*width+(x-1))*4])+(sobelKernelY[2][1]*grayData[((y+1)*width+x)*4])+(sobelKernelY[2][2]*grayData[((y+1)*width+(x+1))*4]),magnitude=Math.sqrt((pixelX*pixelX)+(pixelY*pixelY));sobelData.push(magnitude,magnitude,magnitude,255);}}for(let i=0;i<data.length;i+=4){data[i]=sobelData[i];data[i+1]=sobelData[i+1];data[i+2]=sobelData[i+2];data[i+3]=sobelData[i+3];}ctx.putImageData(imageData,0,0);}
+function applyWavePatternAnalysis(ctx,width,height){const friction=0.9,frequency=document.getElementById('frequency').value;ctx.strokeStyle="rgba(0,255,255,0.5)";for(let y=0;y<height;y+=10){for(let x=0;x<width;x+=10){const angle=Math.atan2(y-height/2,x-width/2)*frequency,length=Math.min(width,height)/2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+Math.cos(angle)*length*friction,y+Math.sin(angle)*length*friction);ctx.stroke();}}}
+document.getElementById('saveButton').addEventListener('click',function(){const dataURL=canvas.toDataURL('image/png'),link=document.createElement('a');link.href=dataURL;link.download=`analysis_${Date.now()}.png`;link.click();});
+</script>
+</body>
+</html>
