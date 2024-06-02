@@ -2,68 +2,165 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Real-Time Edge Detection</title>
+    <title>Amber Spyglass - Refined</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
+            font-family: 'Roboto', sans-serif;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            background-color: #000;
+            margin: 0;
+            background: #000;
             color: #fff;
         }
         .container {
             text-align: center;
         }
-        video, canvas {
-            border: 1px solid #ccc;
+        canvas {
+            border: 2px solid #0f0;
             margin-top: 20px;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        .controls label {
+            margin-right: 10px;
+        }
+        .controls input[type="range"] {
+            width: 100px;
+        }
+        h1 {
+            font-weight: 700;
+            font-size: 2em;
+            color: #0f0;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>Real-Time Edge Detection</h1>
-    <video id="video" width="640" height="480" autoplay></video>
-    <canvas id="canvas" width="640" height="480"></canvas>
+    <h1>Amber Spyglass - Refined</h1>
+    <div id="sketch-holder"></div>
+    <div class="controls">
+        <div>
+            <label for="threshold">Threshold:</label>
+            <input type="range" id="threshold" min="0" max="255" value="128">
+        </div>
+        <div>
+            <label for="brightness">Brightness:</label>
+            <input type="range" id="brightness" min="0" max="255" value="128">
+        </div>
+        <div>
+            <label for="contrast">Contrast:</label>
+            <input type="range" id="contrast" min="0" max="255" value="128">
+        </div>
+        <div>
+            <label for="frequency">Frequency:</label>
+            <input type="range" id="frequency" min="1" max="100" value="50">
+        </div>
+    </div>
 </div>
-<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
+
+<!-- Include p5.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/addons/p5.dom.js"></script>
+
 <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+let video;
+let vScale = 16;
+let thresholdSlider, brightnessSlider, contrastSlider, frequencySlider;
 
-    async function startCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
-    }
+function setup() {
+    createCanvas(640, 480).parent('sketch-holder');
+    pixelDensity(1);
+    video = createCapture(VIDEO);
+    video.size(width / vScale, height / vScale);
+    video.hide();
+    
+    thresholdSlider = select('#threshold');
+    brightnessSlider = select('#brightness');
+    contrastSlider = select('#contrast');
+    frequencySlider = select('#frequency');
+}
 
-    function processVideo() {
-        const src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-        const dst = new cv.Mat(video.height, video.width, cv.CV_8UC1);
+function draw() {
+    background(0);
 
-        function captureFrame() {
-            ctx.drawImage(video, 0, 0, video.width, video.height);
-            let imageData = ctx.getImageData(0, 0, video.width, video.height);
-            src.data.set(imageData.data);
+    video.loadPixels();
+    loadPixels();
+    
+    let threshold = thresholdSlider.value();
+    let brightness = brightnessSlider.value();
+    let contrast = contrastSlider.value();
+    let frequency = frequencySlider.value();
 
-            cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
-            cv.Canny(dst, dst, 50, 100);
+    for (let y = 1; y < video.height - 1; y++) {
+        for (let x = 1; x < video.width - 1; x++) {
+            let index = (x + y * video.width) * 4;
 
-            cv.imshow('canvas', dst);
-            requestAnimationFrame(captureFrame);
+            let r = video.pixels[index + 0];
+            let g = video.pixels[index + 1];
+            let b = video.pixels[index + 2];
+
+            // Apply brightness
+            r = constrain(r * (brightness / 128), 0, 255);
+            g = constrain(g * (brightness / 128), 0, 255);
+            b = constrain(b * (brightness / 128), 0, 255);
+
+            // Apply contrast
+            r = ((r - 128) * (contrast / 128)) + 128;
+            g = ((g - 128) * (contrast / 128)) + 128;
+            b = ((b - 128) * (contrast / 128)) + 128;
+
+            let bright = (r + g + b) / 3;
+
+            let sobelX = 
+                (-1 * video.pixels[(x-1 + (y-1) * video.width) * 4]) +
+                (1 * video.pixels[(x+1 + (y-1) * video.width) * 4]) +
+                (-2 * video.pixels[(x-1 + y * video.width) * 4]) +
+                (2 * video.pixels[(x+1 + y * video.width) * 4]) +
+                (-1 * video.pixels[(x-1 + (y+1) * video.width) * 4]) +
+                (1 * video.pixels[(x+1 + (y+1) * video.width) * 4]);
+
+            let sobelY = 
+                (1 * video.pixels[(x-1 + (y-1) * video.width) * 4]) +
+                (2 * video.pixels[(x + (y-1) * video.width) * 4]) +
+                (1 * video.pixels[(x+1 + (y-1) * video.width) * 4]) +
+                (-1 * video.pixels[(x-1 + (y+1) * video.width) * 4]) +
+                (-2 * video.pixels[(x + (y+1) * video.width) * 4]) +
+                (-1 * video.pixels[(x+1 + (y+1) * video.width) * 4]);
+
+            let edge = sqrt(sobelX * sobelX + sobelY * sobelY);
+
+            if (edge > threshold) {
+                set(x * vScale, y * vScale, color(255, 0, 0)); // Red for high edges
+            } else {
+                set(x * vScale, y * vScale, color(0, 0, 255)); // Blue for low edges
+            }
         }
-        captureFrame();
     }
+    updatePixels();
 
-    video.addEventListener('play', () => {
-        processVideo();
-    });
+    applyWavePattern(frequency);
+}
 
-    startCamera();
+function applyWavePattern(frequency) {
+    stroke(0, 255, 0);
+    noFill();
+    let step = map(frequency, 1, 100, 20, 5);
+
+    for (let x = 0; x < width; x += step) {
+        for (let y = 0; y < height; y += step) {
+            let size = map(noise(x * 0.05, y * 0.05, frameCount * 0.02), 0, 1, step / 2, step);
+            ellipse(x, y, size, size);
+        }
+    }
+}
 </script>
 </body>
 </html>
