@@ -2,139 +2,172 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Real-Time Edge Detection and Tuning</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amber Spyglass - Crystal Waves</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
-            background-color: #000;
-            color: #fff;
+            margin: 0;
+            background-color: #1b1b1b;
+            color: #f0f0f0;
+            font-family: 'Roboto', sans-serif;
         }
-        .container {
+        h1 {
+            margin-bottom: 20px;
+            font-size: 36px;
             text-align: center;
-        }
-        video, canvas {
-            border: 1px solid #ccc;
-            margin-top: 20px;
+            color: #ffcc00;
+            text-shadow: 1px 1px 2px #000;
         }
         .controls {
-            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #2c2c2c;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
         }
         .controls label {
+            font-size: 18px;
             margin-right: 10px;
+        }
+        .controls input, .controls button {
+            font-size: 16px;
+            padding: 10px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 5px;
+            outline: none;
+        }
+        .controls input {
+            width: 60px;
+            text-align: center;
+        }
+        .controls button {
+            background-color: #444;
+            color: #fff;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .controls button:hover {
+            background-color: #555;
+        }
+        canvas {
+            border: 2px solid #ffcc00;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(255, 204, 0, 0.8);
         }
     </style>
 </head>
 <body>
-<div class="container">
-    <h1>Real-Time Edge Detection and Tuning</h1>
-    <video id="video" width="640" height="480" autoplay></video>
-    <canvas id="canvas" width="640" height="480"></canvas>
+    <h1>Amber Spyglass - Crystal Waves</h1>
     <div class="controls">
-        <label for="threshold1">Edge Detection Threshold 1:</label>
-        <input type="range" id="threshold1" min="0" max="255" value="50">
-        <label for="threshold2">Edge Detection Threshold 2:</label>
-        <input type="range" id="threshold2" min="0" max="255" value="100">
-        <label for="frequency">Tuning Frequency:</label>
-        <input type="range" id="frequency" min="1" max="100" value="50">
+        <label for="polygon-sides-input">Polygon Sides:</label>
+        <input type="number" id="polygon-sides-input" min="3" max="12" value="6">
+        <label for="wave-color-input">Wave Color:</label>
+        <input type="color" id="wave-color-input" value="#ff0000">
+        <label for="crystal-sides-input">Crystal Sides:</label>
+        <input type="number" id="crystal-sides-input" min="3" max="12" value="6">
+        <label for="background-color-input">Background Color:</label>
+        <input type="color" id="background-color-input" value="#000000">
+        <button id="reset-button">Reset</button>
+        <button id="init-wave-button">Init Wave</button>
     </div>
-    <div class="guide">
-        <p>Use the sliders to adjust the edge detection thresholds and tuning frequency.</p>
-        <p>Threshold 1 and Threshold 2 control the sensitivity of the edge detection. Start with low values and increase gradually.</p>
-        <p>The tuning frequency adjusts the wave pattern analysis. Start with a moderate value and fine-tune as needed.</p>
-    </div>
-</div>
-<script async src="https://docs.opencv.org/4.x/opencv.js"></script>
-<script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const threshold1Input = document.getElementById('threshold1');
-    const threshold2Input = document.getElementById('threshold2');
-    const frequencyInput = document.getElementById('frequency');
+    <div id="three-container" style="width:600px;height:600px"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, crystal, waves = [];
+        let polygonSides = 6;
+        let waveColor = '#ff0000';
+        let crystalSides = 6;
+        let backgroundColor = '#000000';
 
-    let threshold1 = threshold1Input.value;
-    let threshold2 = threshold2Input.value;
-    let frequency = frequencyInput.value;
-
-    threshold1Input.addEventListener('input', (e) => {
-        threshold1 = e.target.value;
-    });
-    threshold2Input.addEventListener('input', (e) => {
-        threshold2 = e.target.value;
-    });
-    frequencyInput.addEventListener('input', (e) => {
-        frequency = e.target.value;
-    });
-
-    async function startCamera() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-            video.srcObject = stream;
-            video.play();
-        } catch (error) {
-            console.error('Error accessing camera:', error);
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ alpha: true });
+            renderer.setSize(600, 600);
+            document.getElementById('three-container').appendChild(renderer.domElement);
+            createCrystal(crystalSides);
+            camera.position.z = 3;
+            animate();
         }
-    }
 
-    function processVideo() {
-        const src = new cv.Mat(video.height, video.width, cv.CV_8UC4);
-        const gray = new cv.Mat(video.height, video.width, cv.CV_8UC1);
-        const edges = new cv.Mat(video.height, video.width, cv.CV_8UC1);
-
-        function captureFrame() {
-            console.log('Processing frame...');
-            ctx.drawImage(video, 0, 0, video.width, video.height);
-            let imageData = ctx.getImageData(0, 0, video.width, video.height);
-            src.data.set(imageData.data);
-
-            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-            cv.Canny(gray, edges, threshold1, threshold2);
-
-            applyWavePatternAnalysis(edges, edges.cols, edges.rows, frequency);
-            cv.imshow('canvas', edges);
-
-            src.delete();
-            gray.delete();
-            edges.delete();
-
-            requestAnimationFrame(captureFrame);
-        }
-        captureFrame();
-    }
-
-    function applyWavePatternAnalysis(mat, width, height, frequency) {
-        console.log('Applying wave pattern analysis...');
-        const friction = 0.9;
-        const angleFactor = frequency / 10;
-        const canvasData = new cv.Mat();
-
-        mat.copyTo(canvasData);
-
-        for (let y = 0; y < height; y += 10) {
-            for (let x = 0; x < width; x += 10) {
-                const angle = Math.atan2(y - height / 2, x - width / 2) * angleFactor;
-                const length = Math.min(width, height) / 2;
-                const endX = x + Math.cos(angle) * length * friction;
-                const endY = y + Math.sin(angle) * length * friction;
-
-                cv.line(canvasData, new cv.Point(x, y), new cv.Point(endX, endY), [255, 255, 255, 255], 1);
+        function createCrystal(sides) {
+            if (crystal) {
+                scene.remove(crystal);
             }
+            let geometry = new THREE.IcosahedronGeometry(1, sides - 3);
+            let material = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true });
+            crystal = new THREE.Mesh(geometry, material);
+            scene.add(crystal);
         }
-        canvasData.copyTo(mat);
-        canvasData.delete();
-    }
 
-    video.addEventListener('play', () => {
-        processVideo();
-    });
+        function animate() {
+            requestAnimationFrame(animate);
+            crystal.rotation.x += 0.01;
+            crystal.rotation.y += 0.01;
+            waves.forEach(wave => {
+                wave.children.forEach(circle => {
+                    circle.scale.set(wave.scale, wave.scale, wave.scale);
+                });
+                wave.scale += 0.01;
+                if (wave.position.length() > 1) {
+                    wave.velocity.reflect(wave.position.clone().normalize());
+                }
+                wave.position.add(wave.velocity);
+                if (wave.scale > 3) {
+                    scene.remove(wave);
+                    waves.splice(waves.indexOf(wave), 1);
+                }
+            });
+            renderer.setClearColor(new THREE.Color(backgroundColor), 1);
+            renderer.render(scene, camera);
+        }
 
-    startCamera();
-</script>
+        function addWave(color, sides) {
+            let wave = new THREE.Group();
+            for (let i = 0; i < 6; i++) {
+                let geometry = new THREE.CircleGeometry(0.1, sides);
+                let material = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity: 0.5 });
+                let circle = new THREE.Mesh(geometry, material);
+                wave.add(circle);
+            }
+            wave.position.set(0, 0, 0);
+            wave.velocity = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.02);
+            wave.scale = 1;
+            scene.add(wave);
+            waves.push(wave);
+        }
+
+        document.getElementById('polygon-sides-input').addEventListener('input', e => {
+            polygonSides = parseInt(e.target.value, 10);
+        });
+        document.getElementById('wave-color-input').addEventListener('input', e => {
+            waveColor = e.target.value;
+        });
+        document.getElementById('crystal-sides-input').addEventListener('input', e => {
+            crystalSides = parseInt(e.target.value, 10);
+            createCrystal(crystalSides);
+        });
+        document.getElementById('background-color-input').addEventListener('input', e => {
+            backgroundColor = e.target.value;
+        });
+        document.getElementById('reset-button').addEventListener('click', () => {
+            while (waves.length) {
+                scene.remove(waves.pop());
+            }
+        });
+        document.getElementById('init-wave-button').addEventListener('click', () => {
+            addWave(waveColor, polygonSides);
+        });
+
+        init();
+    </script>
 </body>
 </html>
