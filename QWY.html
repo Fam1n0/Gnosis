@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>QWY</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+        }
+        .container {
+            text-align: center;
+            max-width: 800px;
+            width: 100%;
+            margin: 20px;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
+            position: relative;
+        }
+        .section {
+            margin: 20px 0;
+        }
+        input[type="file"], input[type="range"] {
+            margin: 10px 0;
+            width: 100%;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            margin-top: 20px;
+            max-width: 100%;
+        }
+        button {
+            padding: 10px 20px;
+            margin-top: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:disabled {
+            background-color: #ccc;
+        }
+        #fullscreenButton, #exitFullscreenButton {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #exitFullscreenButton {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="container">
+        <h1>Advanced Wave Pattern Analyzer</h1>
+        <div class="section" id="uploadSection">
+            <h2>Upload Image</h2>
+            <input type="file" id="imageInput" accept="image/*" required>
+        </div>
+        <div class="section" id="controlsSection">
+            <h2>Controls</h2>
+            <label for="threshold">Edge Detection Threshold:</label>
+            <input type="range" id="threshold" name="threshold" min="50" max="150" value="100">
+        </div>
+        <div class="section" id="canvasSection">
+            <h2>Analysis Result</h2>
+            <canvas id="canvas"></canvas>
+            <button id="saveButton" disabled>Save Analysis as Image</button>
+        </div>
+        <button id="fullscreenButton">Enter Fullscreen</button>
+        <button id="exitFullscreenButton">Exit Fullscreen</button>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fft.js/0.3.0/fft.min.js"></script>
+    <script>
+        document.getElementById('imageInput').addEventListener('change', function(event) {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    applyEdgeDetection(ctx, img.width, img.height);
+                    analyzeWithModel(canvas);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            document.getElementById('saveButton').disabled = false;
+        });
+
+        document.getElementById('threshold').addEventListener('input', function() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.src = canvas.toDataURL();
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0);
+                applyEdgeDetection(ctx, img.width, img.height);
+            };
+        });
+
+        async function analyzeWithModel(canvas) {
+            const model = await cocoSsd.load();
+            const predictions = await model.detect(canvas);
+            const ctx = canvas.getContext('2d');
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, width, height);
+                ctx.font = '18px Arial';
+                ctx.fillStyle = 'red';
+                ctx.fillText(prediction.class, x, y > 10 ? y - 5 : 10);
+            });
+            applyWavePatternAnalysis(ctx, canvas.width, canvas.height);
+        }
+
+        function applyEdgeDetection(ctx, width, height) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            const grayData = [];
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                grayData.push(avg, avg, avg, data[i + 3]);
+            }
+            const threshold = document.getElementById('threshold').value;
+            const sobelData = [];
+            const sobelKernelX = [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]];
+            const sobelKernelY = [[-1, -2, -1], [0, 0, 0], [1, 2, 1]];
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const pixelX = (sobelKernelX[0][0] * grayData[((y - 1) * width + (x - 1)) * 4]) +
+                                   (sobelKernelX[0][1] * grayData[((y - 1) * width + x) * 4]) +
+                                   (sobelKernelX[0][2] * grayData[((y - 1) * width + (x + 1)) * 4]) +
+                                   (sobelKernelX[1][0] * grayData[(y * width + (x - 1)) * 4]) +
+                                   (sobelKernelX[1][1] * grayData[(y * width + x) * 4]) +
+                                   (sobelKernelX[1][2] * grayData[(y * width + (x + 1)) * 4]) +
+                                   (sobelKernelX[2][0] * grayData[((y + 1) * width + (x - 1)) * 4]) +
+                                   (sobelKernelX[2][1] * grayData[((y + 1) * width + x) * 4]) +
+                                   (sobelKernelX[2][2] * grayData[((y + 1) * width + (x + 1)) * 4]);
+                    const pixelY = (sobelKernelY[0][0] * grayData[((y - 1) * width + (x - 1)) * 4]) +
+                                   (sobelKernelY[0][1] * grayData[((y - 1) * width + x) * 4]) +
+                                   (sobelKernelY[0][2] * grayData[((y - 1) * width + (x + 1)) * 4]) +
+                                   (sobelKernelY[1][0] * grayData[(y * width + (x - 1)) * 4]) +
+                                   (sobelKernelY[1][1] * grayData[(y * width + x) * 4]) +
+                                   (sobelKernelY[1][2] * grayData[(y * width + (x + 1)) * 4]) +
+                                   (sobelKernelY[2][0] * grayData[((y + 1) * width + (x - 1)) * 4]) +
+                                   (sobelKernelY[2][1] * grayData[((y + 1) * width + x) * 4]) +
+                                   (sobelKernelY[2][2] * grayData[((y + 1) * width + (x - 1)) * 4]) +
+                                   (sobelKernelY[2][1] * grayData[((y + 1) * width + x) * 4]) +
+                                   (sobelKernelY[2][2] * grayData[((y + 1) * width + (x + 1)) * 4]);
+                    const magnitude = Math.sqrt((pixelX * pixelX) + (pixelY * pixelY));
+                    const color = `rgba(${magnitude}, ${255 - magnitude}, 128, 255)`;
+                    sobelData.push(color);
+                }
+            }
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const index = (y * width + x) * 4;
+                    const [r, g, b, a] = sobelData[index];
+                    data[index] = r;
+                    data[index + 1] = g;
+                    data[index + 2] = b;
+                    data[index + 3] = a;
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function applyWavePatternAnalysis(ctx, width, height) {
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            const grayData = [];
+            for (let i = 0; i < data.length; i += 4) {
+                const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                grayData.push(avg);
+            }
+
+            const fft = new FFT(width, height);
+            const frequencyData = fft.forward(grayData);
+
+            // Detect significant frequencies and highlight areas
+            const significantFrequencies = [];
+            const threshold = 100; // Adjust this threshold based on your needs
+            for (let i = 0; i < frequencyData.length; i++) {
+                if (frequencyData[i] > threshold) {
+                    significantFrequencies.push(i);
+                }
+            }
+
+            // Highlight areas with significant energy concentrations
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
+            significantFrequencies.forEach(freq => {
+                const x = freq % width;
+                const y = Math.floor(freq / width);
+                ctx.beginPath();
+                ctx.arc(x, y, 5, 0, 2 * Math.PI);
+                ctx.stroke();
+            });
+        }
+
+        document.getElementById('fullscreenButton').addEventListener('click', function() {
+            const container = document.getElementById('container');
+            if (container.requestFullscreen) {
+                container.requestFullscreen();
+            } else if (container.mozRequestFullScreen) { // Firefox
+                container.mozRequestFullScreen();
+            } else if (container.webkitRequestFullscreen) { // Chrome, Safari and Opera
+                container.webkitRequestFullscreen();
+            } else if (container.msRequestFullscreen) { // IE/Edge
+                container.msRequestFullscreen();
+            }
+            document.getElementById('fullscreenButton').style.display = 'none';
+            document.getElementById('exitFullscreenButton').style.display = 'block';
+        });
+
+        document.getElementById('exitFullscreenButton').addEventListener('click', function() {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.mozCancelFullScreen) { // Firefox
+                document.mozCancelFullScreen();
+            } else if (document.webkitExitFullscreen) { // Chrome, Safari and Opera
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) { // IE/Edge
+                document.msExitFullscreen();
+            }
+            document.getElementById('fullscreenButton').style.display = 'block';
+            document.getElementById('exitFullscreenButton').style.display = 'none';
+        });
+
+        document.getElementById('saveButton').addEventListener('click', function() {
+            const canvas = document.getElementById('canvas');
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.href = dataURL;
+            link.download = `analysis_${Date.now()}.png`;
+            link.click();
+        });
+    </script>
+</body>
+</html>
