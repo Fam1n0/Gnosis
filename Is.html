@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1CARU5 Wave Theory</title>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: black; overflow: hidden; }
+        canvas { position: absolute; touch-action: manipulation; }
+        .controls { position: absolute; top: 10px; left: 10px; z-index: 10; display: flex; flex-direction: column; gap: 10px; }
+        button { font-size: 16px; padding: 10px; cursor: pointer; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <canvas id="chakraCanvas"></canvas>
+    <div id="controls" class="controls hidden">
+        <button id="fullscreenButton">Toggle Fullscreen</button>
+    </div>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const chakraCanvas = document.getElementById('chakraCanvas');
+            const ctx = chakraCanvas.getContext('2d');
+            const fullscreenButton = document.getElementById('fullscreenButton');
+            const controls = document.getElementById('controls');
+            const video = document.createElement('video');
+            video.style.display = 'none';
+            document.body.appendChild(video);
+
+            let orientationData = JSON.parse(localStorage.getItem('orientationData')) || { alpha: 0, beta: 0, gamma: 0 };
+            let feedbackData = JSON.parse(localStorage.getItem('feedbackData')) || [];
+            let weights = JSON.parse(localStorage.getItem('weights')) || [1, 1, 1];
+            let lastCaptureTime = localStorage.getItem('lastCaptureTime') || 0;
+            let startTime = localStorage.getItem('startTime') || new Date().getTime();
+            let generations = JSON.parse(localStorage.getItem('generations')) || [];
+
+            class ChakraWave {
+                constructor(x, y, sides, color, pitch, intensity, amplitude, speed, colorVariance) {
+                    this.x = x;
+                    this.y = y;
+                    this.sides = sides;
+                    this.color = color;
+                    this.pitch = pitch;
+                    this.intensity = intensity;
+                    this.amplitude = amplitude;
+                    this.speed = speed;
+                    this.colorVariance = colorVariance;
+                    this.radius = 0;
+                    this.colorShift = 0;
+                }
+
+                draw(ctx, angleOffset, canvasWidth) {
+                    const adjustedIntensity = (Math.sin(this.colorShift) * this.intensity + 1) / 2;
+                    const adjustedColor = `rgba(${hexToRgb(this.color, this.colorVariance).r * adjustedIntensity}, ${hexToRgb(this.color, this.colorVariance).g * adjustedIntensity}, ${hexToRgb(this.color, this.colorVariance).b * adjustedIntensity}, 1)`;
+                    drawWave(ctx, this.x, this.y, this.radius * this.amplitude, adjustedColor, this.sides, angleOffset);
+                    this.radius += 2;
+                    this.colorShift += 0.05 * this.speed;
+                }
+            }
+
+            const chakras = [
+                new ChakraWave(window.innerWidth / 2, window.innerHeight * 0.9, 4, '#FF0000', 440, 1, 1, 1, 0.1),
+                new ChakraWave(window.innerWidth / 2, window.innerHeight * 0.75, 6, '#FF7F00', 493.88, 1, 1, 1, 0.2),
+                new ChakraWave(window.innerWidth / 2, window.innerHeight * 0.6, 10, '#FFFF00', 523.25, 1, 1, 1, 0.3),
+                new ChakraWave(window.innerWidth / 2, window.innerHeight / 2, 12, '#00FF00', 587.33, 1, 1, 1, 0.4),
+                new ChakraWave(window.innerWidth / 2, window.innerHeight * 0.4, 16, '#0000FF', 659.25, 1, 1, 1, 0.5),
+                new ChakraWave(window.innerWidth / 2, window.innerHeight * 0.25, 24, '#4B0082', 698.46, 1, 1, 1, 0.6),
+                new ChakraWave(window.innerWidth / 2, window.innerHeight * 0.1, 32, '#8B00FF', 783.99, 1, 1, 1, 0.7)
+            ];
+
+            function fibonacci(n) { return n <= 1 ? n : fibonacci(n - 1) + fibonacci(n - 2); }
+            function drawFractal(x, y, size, depth) { if (depth === 0) { ctx.fillRect(x, y, size, size); return; } size /= 3; drawFractal(x, y, size, depth - 1); drawFractal(x + size, y, size, depth - 1); drawFractal(x + 2 * size, y, size, depth - 1); drawFractal(x, y + size, size, depth - 1); drawFractal(x + 2 * size, y + size, size, depth - 1); drawFractal(x, y + 2 * size, size, depth - 1); drawFractal(x + size, y + 2 * size, size, depth - 1); drawFractal(x + 2 * size, y + 2 * size, size, depth - 1); }
+            function evaluateArtQuality(fibonacciValue, fractalDepth) { return fibonacciValue * fractalDepth; }
+            function resizeCanvas() { const width = window.innerWidth; const height = window.innerHeight; chakraCanvas.width = width; chakraCanvas.height = height; ctx.scale(1, 1); }
+            resizeCanvas();
+            function drawWave(ctx, x, y, radius, color, sides, angleOffset) { ctx.beginPath(); for (let i = 0; i < sides; i++) { const angle = i * 2 * Math.PI / sides + angleOffset; ctx.lineTo(x + radius * Math.cos(angle), y + radius * Math.sin(angle)); } ctx.closePath(); ctx.strokeStyle = color; ctx.stroke(); }function animateWaves() {
+                const time = new Date();
+                const seconds = time.getSeconds() + time.getMilliseconds() / 1000;
+                const angleOffset = (seconds * (2 * Math.PI / 60)) + (orientationData.alpha * Math.PI / 180);
+                chakras.forEach(chakra => chakra.draw(ctx, angleOffset, chakraCanvas.width));
+                requestAnimationFrame(animateWaves);
+            }
+            function hexToRgb(hex, variance) {
+                const bigint = parseInt(hex.slice(1), 16);
+                const r = (bigint >> 16) & 255;
+                const g = (bigint >> 8) & 255;
+                const b = (bigint & 255);
+                return { r: Math.min(255, r + (variance * 255)), g: Math.min(255, g + (variance * 255)), b: Math.min(255, b + (variance * 255)) };
+            }
+            function determineFlow(hexagram) {
+                const flows = ['North', 'South', 'East', 'West', 'Northeast', 'Northwest', 'Southeast', 'Southwest', 'Up', 'Down', 'Inward', 'Outward'];
+                const index = parseInt(hexagram, 2) % flows.length;
+                return flows[index];
+            }
+            function generateHexagram() {
+                let hexagram = '';
+                for (let i = 0; i < 6; i++) {
+                    hexagram += Math.random() > 0.5 ? '1' : '0';
+                }
+                return hexagram;
+            }
+            function captureImage() {
+                const link = document.createElement('a');
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const canvas = document.createElement('canvas');
+                canvas.width = chakraCanvas.width;
+                canvas.height = chakraCanvas.height;
+                const tempCtx = canvas.getContext('2d');
+                tempCtx.fillStyle = 'black';
+                tempCtx.fillRect(0, 0, canvas.width, canvas.height);
+                tempCtx.drawImage(chakraCanvas, 0, 0);
+                link.download = `chakra_visualization_${timestamp}.png`;
+                link.href = canvas.toDataURL('image/png', 1.0);
+                link.click();
+            }
+            fullscreenButton.addEventListener('click', function() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            });
+            chakraCanvas.addEventListener('click', function() {
+                controls.classList.toggle('hidden');
+            });function selfLearningFlow() {
+                const hexagram = generateHexagram();
+                const flowDirection = determineFlow(hexagram);
+                console.log(`Self-learning decision: Hexagram - ${hexagram}, Flow Direction - ${flowDirection}`);
+                const fibonacciValue = fibonacci(10);
+                const fractalDepth = 3;
+                const artQuality = evaluateArtQuality(fibonacciValue, fractalDepth);
+                console.log(`Art Quality Score: ${artQuality}`);
+                const currentTime = new Date().getTime();
+                if (currentTime - startTime > 36000 && (artQuality > 50 || currentTime - lastCaptureTime > 60000)) {
+                    feedbackData.push({ time: new Date(), good: true });
+                    console.log('Self-learning decision: Good');
+                    captureImage();
+                    lastCaptureTime = currentTime;
+                    localStorage.setItem('lastCaptureTime', lastCaptureTime);
+                } else {
+                    feedbackData.push({ time: new Date(), good: false });
+                    console.log('Self-learning decision: Bad');
+                }
+                localStorage.setItem('feedbackData', JSON.stringify(feedbackData));
+                let recentFeedback = feedbackData.slice(-10);
+                let goodCount = recentFeedback.filter(data => data.good).length;
+                let badCount = recentFeedback.length - goodCount;
+                weights = weights.map((weight, index) => {
+                    if (index === 0) {
+                        return weight + 0.1 * goodCount - 0.1 * badCount;
+                    } else if (index === 1) {
+                        return weight + 0.05 * goodCount - 0.05 * badCount;
+                    } else if (index === 2) {
+                        return weight + 0.02 * goodCount - 0.02 * badCount;
+                    }
+                });
+                localStorage.setItem('weights', JSON.stringify(weights));
+                chakras.forEach(chakra => {
+                    chakra.intensity = weights[0] * Math.random();
+                    chakra.amplitude = weights[1] * Math.random();
+                    chakra.speed = weights[2] * Math.random();
+                    chakra.colorVariance = Math.random(); // Add variation in color
+                });
+                setTimeout(selfLearningFlow, 9000);
+            }
+            animateWaves();
+            setTimeout(selfLearningFlow, 36000);
+            window.addEventListener('deviceorientation', function(event) {
+                orientationData.alpha = event.alpha;
+                orientationData.beta = event.beta;
+                orientationData.gamma = event.gamma;
+                localStorage.setItem('orientationData', JSON.stringify(orientationData));
+            });
+            window.addEventListener('resize', resizeCanvas);
+            navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+                video.srcObject = stream;
+                video.play();
+            });
+            video.addEventListener('play', function() {
+                function sampleColor() {
+                    const width = video.videoWidth;
+                    const height = video.videoHeight;
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const tempCtx = canvas.getContext('2d');
+                    tempCtx.drawImage(video, 0, 0, width, height);
+                    const frame = tempCtx.getImageData(0, 0, width, height);
+                    const length = frame.data.length;
+                    let r = 0, g = 0, b = 0;
+                    for (let i = 0; i < length; i += 4) {
+                        r += frame.data[i];
+                        g += frame.data[i + 1];
+                        b += frame.data[i + 2];
+                    }
+                    r = Math.floor(r / (length / 4));
+                    g = Math.floor(g / (length / 4));
+                    b = Math.floor(b / (length / 4));
+                    chakras.forEach(chakra => {
+                        chakra.color = `rgb(${r}, ${g}, ${b})`;
+                    });
+                    requestAnimationFrame(sampleColor);
+                }
+                sampleColor();
+            });
+        });
+    </script>
+</body>
+</html>
