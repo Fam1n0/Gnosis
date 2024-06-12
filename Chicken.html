@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focusing Vision System</title>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: black; overflow: hidden; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .controls { position: absolute; top: 10px; left: 10px; z-index: 10; display: flex; flex-direction: column; gap: 10px; color: white; }
+        .hidden { display: none; }
+        button, input { font-size: 16px; padding: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <input type="file" id="uploadImage" accept="image/*">
+    <canvas id="canvas"></canvas>
+    <div id="controls" class="controls">
+        <button id="fullscreenButton">Toggle Fullscreen</button>
+        <button id="backButton">Go Back</button>
+        <label>Scan:</label>
+        <input type="range" id="scanSlider" min="0" max="100" value="0">
+        <label>Speed:</label>
+        <input type="range" id="speedSlider" min="0.1" max="2" step="0.1" value="1">
+        <label>Randomness:</label>
+        <input type="range" id="randomnessSlider" min="0" max="1" step="0.1" value="0.5">
+        <label>Amplitude:</label>
+        <input type="range" id="amplitudeSlider" min="1" max="10" step="0.5" value="5">
+    </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const uploadImage = document.getElementById('uploadImage');
+        const fullscreenButton = document.getElementById('fullscreenButton');
+        const backButton = document.getElementById('backButton');
+        const scanSlider = document.getElementById('scanSlider');
+        const speedSlider = document.getElementById('speedSlider');
+        const randomnessSlider = document.getElementById('randomnessSlider');
+        const amplitudeSlider = document.getElementById('amplitudeSlider');
+        let currentImage;
+        let current = [];
+        let previous = [];
+        let history = [];
+        let historyLimit = 300; // store up to 10 seconds if the frame rate is 30fps
+        let speed = 1;
+        let randomness = 0.5;
+        let amplitude = 5;
+        let gyroData = { alpha: 0, beta: 0, gamma: 0 };
+        let audioData = 0;
+        let focusing = true;
+
+        function initCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            current = new Array(canvas.width).fill(0).map(() => new Array(canvas.height).fill(0));
+            previous = new Array(canvas.width).fill(0).map(() => new Array(canvas.height).fill(0));
+        }
+
+        function updateWaves() {
+            for (let i = 1; i < canvas.width - 1; i++) {
+                for (let j = 1; j < canvas.height - 1; j++) {
+                    current[i][j] = ((previous[i - 1][j] + previous[i + 1][j] + previous[i][j - 1] + previous[i][j + 1]) / 2 - current[i][j]) * 0.98;
+                }
+            }
+            let temp = previous;
+            previous = current;
+            current = temp;
+
+            if (history.length >= historyLimit) {
+                history.shift();
+            }
+            history.push(JSON.parse(JSON.stringify(previous)));
+        }
+
+        function drawWaves() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const imageData = ctx.createImageData(canvas.width, canvas.height);
+            const data = imageData.data;
+
+            for (let i = 1; i < canvas.width - 1; i++) {
+                for (let j = 1; j < canvas.height - 1; j++) {
+                    const index = (i + j * canvas.width) * 4;
+                    const value = current[i][j] * amplitude;
+                    data[index] = value + audioData * 10;
+                    data[index + 1] = value * randomness;
+                    data[index + 2] = value + gyroData.beta * 2;
+                    data[index + 3] = 255;
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function animate() {
+            if (focusing) {
+                adjustFocus();
+            }
+            updateWaves();
+            drawWaves();
+            setTimeout(() => {
+                requestAnimationFrame(animate);
+            }, 1000 / (30 * speed));
+        }
+
+        function loadFile(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    currentImage = img;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    initCanvas();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function enterFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+
+        function goBack() {
+            if (history.length > 0) {
+                previous = history.pop();
+                current = JSON.parse(JSON.stringify(previous));
+            }
+        }
+
+        function handleGyro(event) {
+            gyroData.alpha = event.alpha;
+            gyroData.beta = event.beta;
+            gyroData.gamma = event.gamma;
+        }
+
+        function handleAudio() {
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = audioContext.createAnalyser();
+                const microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                analyser.fftSize = 256;
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                function getAudioData() {
+                    analyser.getByteTimeDomainData(dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        sum += dataArray[i];
+                    }
+                    audioData = sum / bufferLength;
+                    requestAnimationFrame(getAudioData);
+                }
+                getAudioData();
+            });
+        }
+
+        function adjustFocus() {
+            // Placeholder for the focusing algorithm
+            // Adjust speed, randomness, amplitude based on edge detection or some other criteria
+            // For now, let's just simulate the focusing by modifying amplitude
+            amplitude += 0.01;
+            if (amplitude > 10) {
+                amplitude = 5;
+                focusing = false;
+            }
+        }
+
+        uploadImage.addEventListener('change', loadFile);
+        fullscreenButton.addEventListener('click', enterFullscreen);
+        backButton.addEventListener('click', goBack);
+        scanSlider.addEventListener('input', () => {
+            const index = Math.floor(scanSlider.value / 100 * history.length);
+            if (history[index]) {
+                previous = JSON.parse(JSON.stringify(history[index]));
+                current = JSON.parse(JSON.stringify(history[index]));
+            }
+        });
+        speedSlider.addEventListener('input', () => {
+            speed = parseFloat(speedSlider.value);
+        });
+        randomnessSlider.addEventListener('input', () => {
+            randomness = parseFloat(randomnessSlider.value);
+        });
+        amplitudeSlider.addEventListener('input', () => {
+            amplitude = parseFloat(amplitudeSlider.value);
+        });
+
+        window.addEventListener('resize', initCanvas);
+        window.addEventListener('deviceorientation', handleGyro);
+        window.addEventListener('load', () => {
+            initCanvas();
+            handleAudio();
+            animate();
+        });
+    </script>
+</body>
+</html>
