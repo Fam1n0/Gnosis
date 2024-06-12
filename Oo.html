@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OO</title>
+<style>
+body, html {margin: 0; padding: 0; overflow: hidden; font-family: Arial, sans-serif; background: #000;}
+</style>
+</head>
+<body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script>
+let scene, camera, renderer, light, objects = [], gyroData = {acc: {x: 0, y: 0, z: 0}}, buildingStep = 0;
+
+function init() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    light = new THREE.PointLight(0xffffff, 1, 100);
+    light.position.set(50, 50, 50);
+    scene.add(light);
+
+    camera.position.z = 5;
+
+    loadState();
+
+    animate();
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    objects.forEach(obj => {
+        obj.rotation.x += 0.01;
+        obj.rotation.y += 0.01;
+        obj.position.x += (Math.random() - 0.5) * 0.01 + gyroData.acc.x * 0.001;
+        obj.position.y += (Math.random() - 0.5) * 0.01 + gyroData.acc.y * 0.001;
+        obj.position.z += (Math.random() - 0.5) * 0.01 + gyroData.acc.z * 0.001;
+    });
+
+    buildingStep++;
+    if (buildingStep % 200 === 0) createBuilding();
+
+    renderer.render(scene, camera);
+    saveState();
+}
+
+function createLine(x1, y1, z1, x2, y2, z2) {
+    const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const points = [];
+    points.push(new THREE.Vector3(x1, y1, z1));
+    points.push(new THREE.Vector3(x2, y2, z2));
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const line = new THREE.Line(geometry, material);
+    scene.add(line);
+    objects.push(line);
+}
+
+function createSpeedSquare(x, y, z, size) {
+    createLine(x, y, z, x + size, y, z);
+    createLine(x, y, z, x, y + size, z);
+    createLine(x, y, z, x + size, y + size, z);
+}
+
+function createCompass(x, y, z, radius) {
+    const geometry = new THREE.CircleGeometry(radius, 32);
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+    const circle = new THREE.Mesh(geometry, material);
+    circle.position.set(x, y, z);
+    scene.add(circle);
+    objects.push(circle);
+}
+
+function createSpirograph(x, y, z, R, r, O) {
+    const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+    const points = [];
+    for (let t = 0; t < Math.PI * 2 * r / gcd(R, r); t += 0.1) {
+        const xPos = (R - r) * Math.cos(t) + O * Math.cos((R - r) / r * t);
+        const yPos = (R - r) * Math.sin(t) - O * Math.sin((R - r) / r * t);
+        points.push(new THREE.Vector3(x + xPos, y + yPos, z));
+    }
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const spirograph = new THREE.Line(geometry, material);
+    scene.add(spirograph);
+    objects.push(spirograph);
+}
+
+function gcd(a, b) {
+    return b ? gcd(b, a % b) : a;
+}
+
+function createCube() {
+    const geometry = new THREE.BoxGeometry();
+    const material = new THREE.MeshBasicMaterial({color: Math.random() * 0xffffff});
+    const cube = new THREE.Mesh(geometry, material);
+    cube.position.set(Math.random() * 4 - 2, Math.random() * 4 - 2, Math.random() * 4 - 2);
+    scene.add(cube);
+    objects.push(cube);
+}
+
+function createBuilding() {
+    const baseX = Math.random() * 8 - 4;
+    const baseY = Math.random() * 8 - 4;
+    for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+            createBlock(baseX + i * 0.2, baseY + j * 0.2, 0);
+        }
+    }
+    for (let k = 0; k < 5; k++) {
+        createBlock(baseX + 2 * 0.2, baseY + 2 * 0.2, k * 0.2);
+    }
+    createSpeedSquare(baseX, baseY, 0, 1);
+    createCompass(baseX, baseY, 0, 1);
+    createSpirograph(baseX, baseY, 0, 1, 0.5, 0.2);
+}
+
+function createBlock(x, y, z) {
+    const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+    const material = new THREE.MeshBasicMaterial({color: Math.random() * 0xffffff});
+    const block = new THREE.Mesh(geometry, material);
+    block.position.set(x, y, z);
+    scene.add(block);
+    objects.push(block);
+}
+
+async function getGyroData() {
+    return new Promise(resolve => {
+        if ('DeviceMotionEvent' in window) {
+            window.addEventListener('devicemotion', event => {
+                gyroData = {acc: event.acceleration, rot: event.rotationRate};
+                resolve(gyroData);
+            });
+        } else {
+            resolve({acc: {x: 0, y: 0, z: 0}});
+        }
+    });
+}
+
+function saveState() {
+    const state = objects.map(obj => ({
+        type: obj.geometry.type,
+        position: obj.position,
+        rotation: obj.rotation,
+        color: obj.material.color
+    }));
+    localStorage.setItem('waveAIState', JSON.stringify(state));
+}
+
+function loadState() {
+    const savedState = JSON.parse(localStorage.getItem('waveAIState'));
+    if (savedState) {
+        savedState.forEach(item => {
+            let obj;
+            if (item.type === 'BoxGeometry') {
+                obj = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({color: item.color}));
+            } else if (item.type === 'BufferGeometry') {
+                obj = new THREE.Line(new THREE.BufferGeometry().setFromPoints(item.geometry.attributes.position.array), new THREE.LineBasicMaterial({color: item.color}));
+            } else if (item.type === 'CircleGeometry') {
+                obj = new THREE.Mesh(new THREE.CircleGeometry(), new THREE.MeshBasicMaterial({color: item.color, side: THREE.DoubleSide}));
+            }
+            obj.position.copy(item.position);
+            obj.rotation.copy(item.rotation);
+            scene.add(obj);
+            objects.push(obj);
+        });
+    }
+}
+
+init();
+getGyroData();
+</script>
+</body>
+</html>
