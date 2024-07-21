@@ -1,1 +1,109 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Path to Gnosis</title><style>@import url('https://fonts.googleapis.com/css2?family=Pirata+One&display=swap');body {font-family: 'Pirata One', cursive;background-color: #1a1a1a;color: #e0e0e0;display: flex;flex-direction: column;align-items: center;margin: 0;padding: 20px;}h1 {font-size: 2.5rem;color: #ff69b4;text-shadow: 0 0 10px #ff69b4, 0 0 20px #ff69b4, 0 0 30px #ff69b4;margin-bottom: 20px;}.controls {display: flex;flex-wrap: wrap;justify-content: center;gap: 10px;margin-bottom: 20px;padding: 10px;background-color: #2c2c2c;border-radius: 10px;box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);}.controls label {font-size: 18px;margin-right: 10px;}.controls input, .controls select, .controls button {font-size: 16px;padding: 10px;margin: 5px;border: none;border-radius: 5px;outline: none;}.controls input[type="number"], .controls input[type="range"] {width: 100px;}.controls button {background-color: #444;color: #fff;cursor: pointer;transition: background-color 0.3s ease;}.controls button:hover {background-color: #555;}canvas {border: 2px solid #ff69b4;border-radius: 10px;box-shadow: 0 0 20px rgba(255, 105, 180, 0.8);}#error {color: #ff69b4;margin-top: 10px;}</style></head><body><h1>Path to Gnosis</h1><div class="controls"><label for="sator-input">Polygon Sides (Sator):</label><input type="number" id="sator-input" min="3" max="100" value="6"><label for="apero-color-input">Wave Color (Apero):</label><input type="color" id="apero-color-input" value="#8080ff"><label for="speed-input">Wave Speed:</label><input type="number" id="speed-input" min="0.5" max="2" step="0.01" value="0.998"><label for="size-input">Wave Size:</label><input type="number" id="size-input" min="10" max="200" step="10" value="50"><label for="bg-color-input">Background Color:</label><input type="color" id="bg-color-input" value="#000000"><button id="tenet-button">Tenet</button><button id="rotas-button">Rotas</button><button id="save-canvas-button">Save Canvas</button></div><canvas id="canvas" width="600" height="600"></canvas><div id="error"></div><script>const canvas=document.getElementById('canvas');const ctx=canvas.getContext('2d');const width=canvas.width;const height=canvas.height;let rippleStrength=512;let damping=0.998;let sides=6;let waveColor='#8080ff';let waveSize=50;let bgColor='#000000';let current=[];let previous=[];const waves=[];for (let i=0;i<width;i++){current[i]=[];previous[i]=[];for (let j=0;j<height;j++){current[i][j]=0;previous[i][j]=0;}}function update(){for (let i=1;i<width-1;i++){for (let j=1;j<height-1;j++){current[i][j]= (previous[i-1][j]+previous[i+1][j]+previous[i][j-1]+previous[i][j+1])/2-current[i][j];current[i][j]*=damping;}}let temp=previous;previous=current;current=temp;}function draw(){ctx.fillStyle=bgColor;ctx.fillRect(0,0,width,height);const imageData=ctx.getImageData(0,0,width,height);const data=imageData.data;for (let i=0;i<width;i++){for (let j=0;j<height;j++){const index=(i+j*width)*4;const colorValue=128+current[i][j]*rippleStrength;if (colorValue>128){const waveColor=getWaveColor(i,j);const [r,g,b]=hexToRgb(waveColor);data[index]=r*(colorValue/255);data[index+1]=g*(colorValue/255);data[index+2]=b*(colorValue/255);data[index+3]=255;}}}ctx.putImageData(imageData,0,0);}function getWaveColor(x,y){for (const wave of waves){if (Math.hypot(wave.x-x,wave.y-y)<wave.radius){return wave.color;}}return '#8080ff';}function animate(){update();draw();requestAnimationFrame(animate);}function getCanvasCoordinates(e){const rect=canvas.getBoundingClientRect();let x,y;if (e.touches){x=e.touches[0].clientX-rect.left;y=e.touches[0].clientY-rect.top;}else{x=e.clientX-rect.left;y=e.clientY-rect.top;}return {x,y};}function hexToRgb(hex){const bigint=parseInt(hex.slice(1),16);const r=(bigint>>16)&255;const g=(bigint>>8)&255;const b=bigint&255;return [r,g,b];}document.getElementById('sator-input').addEventListener('input',(e)=>{sides=parseInt(e.target.value,10);});document.getElementById('apero-color-input').addEventListener('input',(e)=>{waveColor=e.target.value;});document.getElementById('speed-input').addEventListener('input',(e)=>{damping=parseFloat(e.target.value);});document.getElementById('size-input').addEventListener('input',(e)=>{waveSize=parseInt(e.target.value,10);});document.getElementById('bg-color-input').addEventListener('input',(e)=>{bgColor=e.target.value;});document.getElementById('tenet-button').addEventListener('click',()=>{const cx=Math.floor(width/2);const cy=Math.floor(height/2);const sides=parseInt(document.getElementById('sator-input').value,10);const waveColor=document.getElementById('apero-color-input').value;const waveSize=parseInt(document.getElementById('size-input').value,10);previous[cx][cy]=rippleStrength;waves.push({x:cx,y:cy,color:waveColor,radius:waveSize,sides:sides});});document.getElementById('rotas-button').addEventListener('click',()=>{current=current.map(row=>row.map(()=>0));previous=previous.map(row=>row.map(()=>0));waves.length=0;});document.getElementById('save-canvas-button').addEventListener('click',()=>{const link=document.createElement('a');link.download=`ripple_${Date.now()}.png`;link.href=canvas.toDataURL();link.click();});canvas.addEventListener('mousedown',(e)=>{const {x,y}=getCanvasCoordinates(e);const sides=parseInt(document.getElementById('sator-input').value,10);const waveColor=document.getElementById('apero-color-input').value;const waveSize=parseInt(document.getElementById('size-input').value,10);previous[Math.floor(x)][Math.floor(y)]=rippleStrength;waves.push({x:Math.floor(x),y:Math.floor(y),color:waveColor,radius:waveSize,sides:sides});});animate();</script></body></html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Path to Gnosis</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Pirata+One&display=swap');
+body {
+    font-family: 'Pirata One', cursive;
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0;
+    padding: 20px;
+}
+h1 {
+    font-size: 3rem;
+    color: #ff69b4;
+    text-shadow: 0 0 10px #ff69b4, 0 0 20px #ff69b4, 0 0 30px #ff69b4;
+    margin-bottom: 20px;
+}
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    padding: 20px;
+    background-color: #2c2c2c;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+.controls label {
+    font-size: 18px;
+    margin-right: 10px;
+}
+.controls input, .controls select, .controls button {
+    font-size: 16px;
+    padding: 10px;
+    margin: 5px;
+    border: none;
+    border-radius: 5px;
+    outline: none;
+}
+.controls input[type="number"], .controls input[type="range"] {
+    width: 100px;
+}
+.controls button {
+    background-color: #444;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+.controls button:hover {
+    background-color: #555;
+}
+canvas {
+    border: 2px solid #ff69b4;
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(255, 105, 180, 0.8);
+    margin-top: 20px;
+}
+#error {
+    color: #ff69b4;
+    margin-top: 10px;
+}
+#toggle-controls {
+    margin-top: 10px;
+    background-color: #444;
+    color: #fff;
+    padding: 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+#toggle-controls:hover {
+    background-color: #555;
+}
+</style>
+</head>
+<body>
+<h1>Path to Gnosis</h1>
+<button id="toggle-controls">Toggle Controls</button>
+<div class="controls" id="controls">
+    <label for="sator-input">Polygon Sides (Sator):</label>
+    <input type="number" id="sator-input" min="3" max="100" value="6">
+    <label for="apero-color-input">Wave Color (Apero):</label>
+    <input type="color" id="apero-color-input" value="#8080ff">
+    <label for="speed-input">Wave Speed:</label>
+    <input type="number" id="speed-input" min="0.5" max="2" step="0.01" value="0.998">
+    <label for="size-input">Wave Size:</label>
+    <input type="number" id="size-input" min="10" max="200" step="10" value="50">
+    <label for="bg-color-input">Background Color:</label>
+    <input type="color" id="bg-color-input" value="#000000">
+    <button id="tenet-button">Tenet</button>
+    <button id="rotas-button">Rotas</button>
+    <button id="save-canvas-button">Save Canvas</button>
+</div>
+<canvas id="canvas" width="600" height="600"></canvas>
+<div id="error"></div>
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),width=canvas.width,height=canvas.height;let rippleStrength=512,damping=0.998,sides=6,waveColor='#8080ff',waveSize=50,bgColor='#000000',current=[],previous=[],waves=[];for(let i=0;i<width;i++){current[i]=[],previous[i]=[];for(let j=0;j<height;j++)current[i][j]=previous[i][j]=0}function update(){for(let i=1;i<width-1;i++)for(let j=1;j<height-1;j++){current[i][j]=(previous[i-1][j]+previous[i+1][j]+previous[i][j-1]+previous[i][j+1])/2-current[i][j];current[i][j]*=damping}let temp=previous;previous=current;current=temp}function draw(){ctx.fillStyle=bgColor;ctx.fillRect(0,0,width,height);const imageData=ctx.getImageData(0,0,width,height),data=imageData.data;for(let i=0;i<width;i++)for(let j=0;j<height;j++){const index=(i+j*width)*4,colorValue=128+current[i][j]*rippleStrength;if(colorValue>128){const waveColor=getWaveColor(i,j),[r,g,b]=hexToRgb(waveColor);data[index]=r*(colorValue/255);data[index+1]=g*(colorValue/255);data[index+2]=b*(colorValue/255);data[index+3]=255}}ctx.putImageData(imageData,0,0)}function getWaveColor(x,y){for(const wave of waves)if(Math.hypot(wave.x-x,wave.y-y)<wave.radius)return wave.color;return'#8080ff'}function animate(){update();draw();requestAnimationFrame(animate)}function getCanvasCoordinates(e){const rect=canvas.getBoundingClientRect();let x,y;if(e.touches)x=e.touches[0].clientX-rect.left,y=e.touches[0].clientY-rect.top;else x=e.clientX-rect.left,y=e.clientY-rect.top;return{x,y}}function hexToRgb(hex){const bigint=parseInt(hex.slice(1),16),r=(bigint>>16)&255,g=(bigint>>8)&255,b=bigint&255;return[r,g,b]}document.getElementById('sator-input').addEventListener('input',e=>sides=parseInt(e.target.value,10));document.getElementById('apero-color-input').addEventListener('input',e=>waveColor=e.target.value);document.getElementById('speed-input').addEventListener('input',e=>damping=parseFloat(e.target.value));document.getElementById('size-input').addEventListener('input',e=>waveSize=parseInt(e.target.value,10));document.getElementById('bg-color-input').addEventListener('input',e=>bgColor=e.target.value);document.getElementById('tenet-button').addEventListener('click',()=>{const cx=Math.floor(width/2),cy=Math.floor(height/2),sides=parseInt(document.getElementById('sator-input').value,10),waveColor=document.getElementById('apero-color-input').value,waveSize=parseInt(document.getElementById('size-input').value,10);previous[cx][cy]=rippleStrength;waves.push({x:cx,y:cy,color:waveColor,radius:waveSize,sides:sides})});document.getElementById('rotas-button').addEventListener('click',()=>{current=current.map(row=>row.map(()=>0)),previous=previous.map(row=>row.map(()=>0)),waves.length=0});document.getElementById('save-canvas-button').addEventListener('click',()=>{const link=document.createElement('a');link.download=`ripple_${Date.now()}.png`;link.href=canvas.toDataURL();link.click()});canvas.addEventListener('mousedown',e=>{const{x,y}=getCanvasCoordinates(e),sides=parseInt(document.getElementById('sator-input').value,10),waveColor=document.getElementById('apero-color-input').value,waveSize=parseInt(document.getElementById('size-input').value,10);previous[Math.floor(x)][Math.floor(y)]=rippleStrength;waves.push({x:Math.floor(x),y:Math.floor(y),color:waveColor,radius:waveSize,sides:sides})});animate();
+document.getElementById('toggle-controls').addEventListener('click',()=>{const controls=document.getElementById('controls');controls.style.display=controls.style.display==='none'?'flex':'none';});
+</script>
+</body>
+</html>
