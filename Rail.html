@@ -1,0 +1,315 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advantage Welding - Scaled Layout Visualizer</title>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --surface: #1e1e1e;
+            --primary: #bb86fc;
+            --secondary: #03dac6;
+            --alert: #cf6679;
+            --text-main: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --border: #333333;
+            --concrete: #555555;
+            --steel: #888888;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+        }
+
+        header {
+            background-color: var(--surface);
+            padding: 1.5rem;
+            text-align: center;
+            border-bottom: 2px solid var(--primary);
+        }
+
+        header h1 { margin: 0; color: var(--primary); }
+        header p { margin: 0.5rem 0 0 0; color: var(--text-muted); }
+
+        .control-panel {
+            background-color: #252525;
+            padding: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        select {
+            background-color: var(--surface);
+            color: var(--text-main);
+            border: 1px solid var(--primary);
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .viewer-container {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .canvas-wrapper {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto; /* Allows horizontal scrolling for long runs */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .canvas-title {
+            color: var(--secondary);
+            margin-top: 0;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        canvas {
+            background-color: #1a1a1a;
+            display: block;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 2rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Advantage Welding Interactive Blueprint</h1>
+        <p>Proportional Top & Side Elevation Visualizer</p>
+    </header>
+
+    <div class="control-panel">
+        <label for="runSelect"><strong>Select Structural Section:</strong></label>
+        <select id="runSelect" onchange="renderLayout()">
+            <option value="1A">Section 1A (29' / 348" to 3-Way)</option>
+            <option value="1B">Section 1B (15.5' / 186")</option>
+            <option value="1C">Section 1C (96' / 1152")</option>
+            <option value="2A">Section 2A (187.5")</option>
+            <option value="2B">Section 2B (119")</option>
+            <option value="3A">Section 3A (16' / 192")</option>
+            <option value="3C">Section 3C (79' / 948" Transition)</option>
+            <option value="4C">Section 4C (42' 6¼" / 510.25")</option>
+        </select>
+    </div>
+
+    <div class="viewer-container">
+        
+        <div class="canvas-wrapper">
+            <h2 class="canvas-title">
+                TOP-DOWN VIEW
+                <div class="stats-bar" id="topStats"></div>
+            </h2>
+            <canvas id="topCanvas" height="150"></canvas>
+        </div>
+
+        <div class="canvas-wrapper">
+            <h2 class="canvas-title">
+                SIDE ELEVATION
+                <div class="stats-bar" id="sideStats"></div>
+            </h2>
+            <canvas id="sideCanvas" height="350"></canvas>
+        </div>
+
+    </div>
+
+    <script>
+        // Mathematical parameters established from hybridized layout
+        const projectData = {
+            "1A": { length: 348, type: "18", marks: [7, 60, 108, 156, 204, 252, 300, 348] },
+            "1B": { length: 186, type: "42", marks: [7, 55, 103, 151, 179] },
+            "1C": { length: 1152, type: "42", marks: [7, 55, 103, 151, 199, 247, 295, 343, 391, 439, 487, 535, 583, 631, 679, 727, 775, 823, 871, 919, 967, 1015, 1063, 1111, 1145] },
+            "2A": { length: 187.5, type: "18", marks: [7, 55, 103, 151, 180.5] },
+            "2B": { length: 119, type: "18", marks: [7, 42, 77, 112] },
+            "3A": { length: 192, type: "42", marks: [7, 55, 103, 151, 185] },
+            "3C": { length: 948, type: "mixed", transition: 624, marks: [7, 55, 103, 151, 199, 247, 295, 343, 391, 439, 487, 535, 583, 624, 672, 720, 768, 816, 864, 912, 941] },
+            "4C": { length: 510.25, type: "18", marks: [7, 55, 103, 151, 199, 247, 295, 343, 391, 439, 487, 503.25] }
+        };
+
+        // Scale: 1 inch physical = 3 pixels on screen
+        const PPI = 3; 
+        const PADDING = 50;
+
+        function renderLayout() {
+            const runId = document.getElementById('runSelect').value;
+            const data = projectData[runId];
+            
+            // Calculate pixel dimensions
+            const totalPixels = (data.length * PPI) + (PADDING * 2);
+            
+            // Update stats
+            document.getElementById('topStats').innerHTML = `<span>Total Length: ${data.length}"</span> <span>Posts: ${data.marks.length}</span>`;
+            document.getElementById('sideStats').innerHTML = `<span>Scale: 1" = 3px</span>`;
+
+            drawTopView(totalPixels, data);
+            drawSideView(totalPixels, data);
+        }
+
+        function drawTopView(width, data) {
+            const canvas = document.getElementById('topCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = width;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const startY = 40;
+            const wallWidth = 14 * PPI;
+            const postSize = 2 * PPI;
+            const centerLine = startY + (7 * PPI);
+
+            // Draw Substrate (Concrete/Deck outline)
+            ctx.fillStyle = '#333';
+            ctx.fillRect(PADDING, startY, data.length * PPI, wallWidth);
+            ctx.strokeStyle = '#555';
+            ctx.strokeRect(PADDING, startY, data.length * PPI, wallWidth);
+
+            // Draw Center Layout Line
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(PADDING, centerLine);
+            ctx.lineTo(PADDING + (data.length * PPI), centerLine);
+            ctx.strokeStyle = '#03dac6';
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset
+
+            // Draw Posts and Intervals
+            ctx.fillStyle = '#bb86fc';
+            ctx.textAlign = 'center';
+            ctx.font = '12px Arial';
+
+            for (let i = 0; i < data.marks.length; i++) {
+                let mark = data.marks[i];
+                let xPos = PADDING + (mark * PPI);
+                
+                // Draw 2x2 Square centered on mark
+                ctx.fillRect(xPos - (postSize/2), centerLine - (postSize/2), postSize, postSize);
+                
+                // Label the exact mark above
+                ctx.fillStyle = '#e0e0e0';
+                ctx.fillText(`${mark}"`, xPos, startY - 10);
+                ctx.fillStyle = '#bb86fc';
+
+                // Draw interval dimension to next post
+                if (i < data.marks.length - 1) {
+                    let nextMark = data.marks[i+1];
+                    let nextX = PADDING + (nextMark * PPI);
+                    let midX = xPos + ((nextX - xPos) / 2);
+                    let interval = (nextMark - mark).toFixed(1);
+                    
+                    ctx.fillStyle = '#a0a0a0';
+                    ctx.fillText(`< ${interval}" >`, midX, startY + wallWidth + 20);
+                    ctx.fillStyle = '#bb86fc';
+                }
+            }
+        }
+
+        function drawSideView(width, data) {
+            const canvas = document.getElementById('sideCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = width;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const groundY = 300;
+            const postWidth = 2 * PPI;
+            
+            // Draw Substrate Ground Line
+            ctx.fillStyle = '#444';
+            ctx.fillRect(PADDING, groundY, data.length * PPI, 20);
+
+            ctx.fillStyle = '#bb86fc';
+
+            for (let i = 0; i < data.marks.length; i++) {
+                let mark = data.marks[i];
+                let xPos = PADDING + (mark * PPI);
+                
+                // Determine height logic
+                let heightInches = 18;
+                if (data.type === '42') heightInches = 42;
+                if (data.type === 'mixed') {
+                    heightInches = (mark >= data.transition) ? 42 : 18;
+                }
+
+                let pxHeight = heightInches * PPI;
+                let postTopY = groundY - pxHeight;
+
+                // Draw Post Tube
+                ctx.fillRect(xPos - (postWidth/2), postTopY, postWidth, pxHeight);
+
+                // Draw Baseplate (4x4)
+                let bpWidth = 4 * PPI;
+                ctx.fillRect(xPos - (bpWidth/2), groundY - 4, bpWidth, 4);
+
+                // Draw Cables (Lines running horizontally)
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.lineWidth = 1;
+                
+                let numCables = (heightInches === 42) ? 13 : 5;
+                let cableSpacing = pxHeight / (numCables + 1);
+
+                // Determine cable reach (to next post, or end of line)
+                let cableEndX = xPos;
+                if (i < data.marks.length - 1) {
+                    cableEndX = PADDING + (data.marks[i+1] * PPI);
+                }
+
+                if (i < data.marks.length - 1) {
+                    // Only draw cables bridging to the next post if the next post exists
+                    let nextHeight = 18;
+                    if (data.type === '42') nextHeight = 42;
+                    if (data.type === 'mixed') nextHeight = (data.marks[i+1] >= data.transition) ? 42 : 18;
+
+                    // If transitioning down or up, cables terminate
+                    let maxDrawCables = Math.min(numCables, (nextHeight === 42 ? 13 : 5));
+
+                    for (let c = 1; c <= maxDrawCables; c++) {
+                        ctx.beginPath();
+                        ctx.moveTo(xPos, postTopY + (c * cableSpacing));
+                        // If standard height match
+                        ctx.lineTo(cableEndX, postTopY + (c * cableSpacing));
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // Draw Continuous Top Rail
+            ctx.fillStyle = '#03dac6';
+            let railHeight = 2 * PPI; // 2x3 flat
+            
+            // For simple linear continuous runs without transitions in this visualizer
+            if(data.type !== 'mixed') {
+                let yRail = groundY - (data.type === '42' ? 42*PPI : 18*PPI) - railHeight;
+                ctx.fillRect(PADDING, yRail, data.length * PPI, railHeight);
+            } else {
+                // Draw 18" rail segment
+                ctx.fillRect(PADDING, groundY - (18*PPI) - railHeight, (data.transition) * PPI, railHeight);
+                // Draw 42" rail segment
+                ctx.fillRect(PADDING + (data.transition * PPI), groundY - (42*PPI) - railHeight, (data.length - data.transition) * PPI, railHeight);
+            }
+        }
+
+        // Initialize first render
+        window.onload = renderLayout;
+    </script>
+</body>
+</html>
