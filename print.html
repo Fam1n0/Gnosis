@@ -218,7 +218,7 @@
             "1A": { length: 348, type: "18", marks: [7, 60, 108, 156, 204, 252, 300, 348] },
             "1B": { length: 186, type: "42", marks: [7, 55, 103, 151, 179] },
             "1C": { length: 1152, type: "42", marks: [7, 55, 103, 151, 199, 247, 295, 343, 391, 439, 487, 535, 583, 631, 679, 727, 775, 823, 871, 919, 967, 1015, 1063, 1111, 1145] },
-            "2A": { length: 187.5, type: "18", marks: [7, 55, 103, 151, 180.5] },
+            "2A": { length: 187.5, type: "18", marks: [55, 103, 151, 180.5] }, // 7" starter mark removed per parameters
             "2B": { length: 119, type: "18", marks: [7, 42, 77, 112] },
             "3A": { length: 192, type: "42", marks: [7, 55, 103, 151, 185] },
             "3C": { length: 948, type: "mixed", transition: 624, marks: [7, 55, 103, 151, 199, 247, 295, 343, 391, 439, 487, 535, 583, 624, 672, 720, 768, 816, 864, 912, 941] },
@@ -260,7 +260,6 @@
             
             const totalPixels = (data.length * PPI) + (PADDING * 2);
             
-            // Extract the full text from the select option to use as the header
             const fullTitle = selectElement.options[selectElement.selectedIndex].text;
             document.getElementById('docTitle').innerText = fullTitle;
 
